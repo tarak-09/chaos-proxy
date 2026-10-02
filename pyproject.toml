@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "TCP proxy that injects network faults like latency and connection drops for local resilience testing."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["aiohttp"]
 
 [project.scripts]
 faultproxy = "faultproxy.cli:main"

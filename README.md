@@ -10,6 +10,7 @@ By intercepting bi-directional traffic using `asyncio` streams, FaultProxy allow
 - **Latency Jitter:** Add randomness to latency to simulate variable network conditions.
 - **Connection Drops:** Simulate unexpected TCP connection resets.
 - **Bandwidth Throttling:** Limit throughput (bytes per second) to test slow connections.
+- **Dynamic Management API:** View and update fault injection parameters in real-time via an asynchronous REST API without restarting the proxy.
 - **High Performance:** Decoupled `asyncio.Queue` architecture ensures that latency injection does not incorrectly throttle throughput, maintaining accurate network fault simulations.
 
 ## Installation
@@ -40,6 +41,7 @@ uv run faultproxy -p <local_port> -R <remote_host> -P <remote_port> [fault_flags
 - `--jitter`: Latency jitter in milliseconds (+/-)
 - `--drop-prob`: Probability of dropping the connection (0.0 to 1.0)
 - `--throttle`: Maximum bandwidth in bytes per second (0 for unlimited)
+- `--api-port`: Port to run the asynchronous HTTP management API on (default: none)
 - `-v, --verbose`: Enable verbose logging
 
 ## Worked Examples
@@ -70,6 +72,20 @@ uv run faultproxy -p 8080 -R example.com -P 80 --throttle 10240
 Drop approximately 10% of network data chunks, causing premature connection closures.
 ```bash
 uv run faultproxy -p 8080 -R example.com -P 80 --drop-prob 0.1
+```
+
+### 5. Dynamic Fault Injection via Management API
+Start the proxy with the HTTP management API on port 9090.
+```bash
+uv run faultproxy -p 8080 -R example.com -P 80 --api-port 9090
+```
+While the proxy is running, you can dynamically view and update network conditions using REST endpoints:
+```bash
+# View current configuration
+curl http://127.0.0.1:9090/config
+
+# Update latency to 300ms on the fly
+curl -X PUT http://127.0.0.1:9090/config -H "Content-Type: application/json" -d '{"latency_ms": 300}'
 ```
 
 ## Running Tests

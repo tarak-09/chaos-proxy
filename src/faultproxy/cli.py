@@ -5,6 +5,7 @@ import sys
 
 from .faults import FaultConfig
 from .proxy import ProxyServer
+from .api import ManagementAPI
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -28,6 +29,9 @@ def parse_args():
                         help="Probability of dropping the connection (0.0 to 1.0)")
     parser.add_argument("--throttle", type=int, default=0,
                         help="Maximum bandwidth in bytes per second (0 for unlimited)")
+    
+    parser.add_argument("--api-port", type=int, default=None,
+                        help="Port to run the asynchronous HTTP management API on (default: none)")
     
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     
@@ -61,12 +65,21 @@ async def async_main():
         fault_config=fault_config
     )
     
+    api_server = None
+    if args.api_port is not None:
+        api_server = ManagementAPI(fault_config=fault_config, host=args.local_host, port=args.api_port)
+    
     await server.start()
+    if api_server:
+        await api_server.start()
+        
     try:
         await server.serve_forever()
     except KeyboardInterrupt:
         logging.info("Shutting down...")
     finally:
+        if api_server:
+            await api_server.stop()
         await server.stop()
 
 def main():
