@@ -113,3 +113,32 @@ async def test_proxy_drop(echo_server):
     writer.close()
     await writer.wait_closed()
     await proxy.stop()
+
+@pytest.mark.asyncio
+async def test_proxy_throttling_dynamic(echo_server):
+    config = FaultConfig(throttle_bytes_per_sec=1) # 1 byte/s (very slow)
+    proxy = ProxyServer('127.0.0.1', 0, '127.0.0.1', echo_server, config)
+    await proxy.start()
+    proxy_port = proxy.server.sockets[0].getsockname()[1]
+    
+    reader, writer = await asyncio.open_connection('127.0.0.1', proxy_port)
+    
+    payload = b"test"
+    start_time = time.monotonic()
+    writer.write(payload)
+    await writer.drain()
+    
+    # After a tiny bit, update config to fast
+    await asyncio.sleep(0.1)
+    config.throttle_bytes_per_sec = 1000000
+    
+    resp = await reader.readexactly(4)
+    end_time = time.monotonic()
+    
+    assert resp == payload
+    # Should finish much faster than 4 seconds since we updated the rate
+    assert (end_time - start_time) < 1.0
+    
+    writer.close()
+    await writer.wait_closed()
+    await proxy.stop()

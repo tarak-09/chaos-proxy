@@ -9,7 +9,7 @@ By intercepting bi-directional traffic using `asyncio` streams, FaultProxy allow
 - **Artificial Latency:** Inject static delay per chunk of data.
 - **Latency Jitter:** Add randomness to latency to simulate variable network conditions.
 - **Connection Drops:** Simulate unexpected TCP connection resets.
-- **Bandwidth Throttling:** Limit throughput (bytes per second) to test slow connections.
+- **Bandwidth Throttling:** Limit throughput (bytes per second) using a token-bucket algorithm to test slow or degraded connections without latency averaging artifacts.
 - **Dynamic Management API:** View and update fault injection parameters in real-time via an asynchronous REST API without restarting the proxy.
 - **High Performance:** Decoupled `asyncio.Queue` architecture ensures that latency injection does not incorrectly throttle throughput, maintaining accurate network fault simulations.
 

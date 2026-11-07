@@ -11,6 +11,49 @@ logger = logging.getLogger(__name__)
 class ConnectionDropper(Exception):
     pass
 
+class TokenBucket:
+    def __init__(self, rate_callback):
+        self._get_rate = rate_callback
+        self._rate = rate_callback()
+        self._capacity = self._rate
+        self._tokens = float(self._capacity)
+        self._last_fill = time.monotonic()
+
+    def _sync_rate(self):
+        new_rate = self._get_rate()
+        if new_rate != self._rate:
+            self._update_tokens()
+            self._rate = new_rate
+            self._capacity = new_rate
+            if self._tokens > self._capacity:
+                self._tokens = float(self._capacity)
+
+    def _update_tokens(self):
+        now = time.monotonic()
+        if self._rate > 0:
+            elapsed = now - self._last_fill
+            self._tokens = min(float(self._capacity), self._tokens + elapsed * self._rate)
+        self._last_fill = now
+
+    async def consume(self, amount: float):
+        while amount > 0:
+            self._sync_rate()
+            if self._rate <= 0:
+                return
+            
+            self._update_tokens()
+            if self._tokens >= amount:
+                self._tokens -= amount
+                return
+            
+            if self._tokens > 0:
+                amount -= self._tokens
+                self._tokens = 0.0
+                
+            if self._rate > 0:
+                sleep_time = amount / self._rate
+                await asyncio.sleep(min(sleep_time, 0.1))
+
 class ProxyServer:
     def __init__(self, local_host: str, local_port: int, remote_host: str, remote_port: int, fault_config: FaultConfig):
         self.local_host = local_host
@@ -55,8 +98,7 @@ class ProxyServer:
             queue = asyncio.Queue()
             
             # State for throttling
-            start_time = time.monotonic()
-            bytes_transferred = 0
+            bucket = TokenBucket(lambda: self.fault_config.throttle_bytes_per_sec)
 
             async def read_loop():
                 try:
@@ -71,7 +113,6 @@ class ProxyServer:
                     await queue.put(None)
 
             async def write_loop():
-                nonlocal bytes_transferred
                 try:
                     while True:
                         item = await queue.get()
@@ -100,11 +141,7 @@ class ProxyServer:
 
                         # Apply bandwidth throttling
                         if self.fault_config.throttle_bytes_per_sec > 0:
-                            bytes_transferred += len(data)
-                            expected_time = bytes_transferred / self.fault_config.throttle_bytes_per_sec
-                            elapsed = time.monotonic() - start_time
-                            if expected_time > elapsed:
-                                await asyncio.sleep(expected_time - elapsed)
+                            await bucket.consume(float(len(data)))
 
                         writer.write(data)
                         await writer.drain()
